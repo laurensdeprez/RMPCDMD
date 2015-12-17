@@ -41,6 +41,10 @@ add_executable(setup_flow
 test/setup_flow.f90)
 target_link_libraries(setup_flow RMPCDMD fortran_h5md ParseText)
 
+add_executable(setup_flow_inoutlet
+test/setup_flow_inoutlet.f90)
+target_link_libraries(setup_flow_inoutlet RMPCDMD fortran_h5md ParseText)
+
 add_executable(setup_simple_colloids
 test/setup_simple_colloids.f90)
 target_link_libraries(setup_simple_colloids RMPCDMD fortran_h5md ParseText)

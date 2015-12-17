@@ -161,6 +161,7 @@ program setup_fluid
 
   end do
 
+
   clock = 0
   do i = 1 , solvent_cells% N
      if ( solvent_cells% cell_count(i) > 0 ) clock = clock + 1
