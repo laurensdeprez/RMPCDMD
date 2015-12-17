@@ -22,7 +22,7 @@ program setup_fluid
 
   type(h5md_file_t) :: datafile
   type(h5md_element_t) :: elem
-  type(h5md_element_t) :: e_solvent, e_solvent_v
+  type(h5md_element_t) :: e_solvent, e_solvent_v, e_solvent_species
   type(h5md_element_t) :: elem_tz, elem_tz_count, elem_vx_count
   type(h5md_element_t) :: elem_rhoz
   type(h5md_element_t) :: elem_vx
@@ -36,7 +36,7 @@ program setup_fluid
 
   double precision :: v_com(3), wall_v(3,2), wall_t(2)
   ! in this set up the gravity will have to be in the x direction 
-  double precision, parameter :: gravity_field(3) = [ 0.01d0, 0.d0, 0.d0 ]
+  double precision, parameter :: gravity_field(3) = [ 0.001d0, 0.d0, 0.d0 ]
   double precision :: T
 
   double precision, parameter :: tau = 0.1d0
@@ -54,7 +54,7 @@ program setup_fluid
 
   call h5open_f(error)
 
-  L = [6, 6, 30]
+  L = [30, 6, 30]
   N = 10*L(1)*L(2)*L(3)
 
   call solvent% init(N,2)
@@ -68,7 +68,7 @@ program setup_fluid
   call solvent% random_placement(L*1.d0)
 
   do i = 1, solvent% Nmax
-     if (solvent% pos(2,i) < (L(2)/2.d0)) then
+     if (solvent% pos(3,i) < (L(3)/2.d0)) then
         solvent% species(i) = 1
      else
         solvent% species(i) = 2
@@ -96,6 +96,7 @@ program setup_fluid
 
   call e_solvent% create_time(solvent_group, 'position', solvent% pos, ior(H5MD_TIME, H5MD_STORE_TIME))
   call e_solvent_v% create_time(solvent_group, 'velocity', solvent% vel, ior(H5MD_TIME, H5MD_STORE_TIME))
+  call e_solvent_species% create_time(solvent_group, 'species', solvent% species, ior(H5MD_TIME, H5MD_STORE_TIME))
   call elem_tz% create_time(datafile% observables, 'tz', tz% data, ior(H5MD_TIME, H5MD_STORE_TIME))
   call elem_tz_count% create_time(datafile% observables, 'tz_count', tz% count, ior(H5MD_TIME, H5MD_STORE_TIME))
   call elem_vx% create_time(datafile% observables, 'vx', tz% data, ior(H5MD_TIME, H5MD_STORE_TIME))
@@ -134,7 +135,7 @@ program setup_fluid
      call solvent_cells%count_particles(solvent% pos)
 
      T = compute_temperature(solvent, solvent_cells, tz)
-     write(*,*) T, sum(solvent% vel**2)/(3*solvent% Nmax)!, v_com
+     write(13,*) T, sum(solvent% vel**2)/(3*solvent% Nmax), v_com
      call elem_T% append(T, i, i*tau)
 
      call compute_rho(solvent, rhoz)
@@ -152,12 +153,13 @@ program setup_fluid
         rhoz% data = rhoz% data / (50.d0 * rhoz% dx)
         call elem_rhoz% append(rhoz% data, i, i*tau)
         rhoz% data = 0
+        call e_solvent% append(solvent% pos, i, i*tau)
+        call e_solvent_v% append(solvent% vel, i, i*tau)
+        call e_solvent_species% append(solvent% species, i, i*tau)
      end if
+     
 
   end do
-
-  call e_solvent% append(solvent% pos, i, i*tau)
-  call e_solvent_v% append(solvent% vel, i, i*tau)
 
   clock = 0
   do i = 1 , solvent_cells% N
@@ -168,6 +170,7 @@ program setup_fluid
 
   call e_solvent% close()
   call e_solvent_v% close()
+  call e_solvent_species% close()
   call elem_tz% close()
   call elem_tz_count% close()
   call elem_rhoz% close()
@@ -196,6 +199,7 @@ contains
     double precision, dimension(3) :: old_pos, old_vel
     double precision :: t_c, t_b, t_ab
     double precision :: time
+    integer :: check
 
     pos_min = 0
     pos_max = cells% edges
@@ -205,14 +209,10 @@ contains
        old_vel = particles% vel(:,i)
        particles% pos(:,i) = particles% pos(:,i) + particles% vel(:,i)*dt + g*dt**2/2
        particles% pos(2,i) = modulo( particles% pos(2,i) , cells% edges(2) )
-       !particles crossing the boundary at x_max will change species before pbc 
-       !keeping in mind that we initialize with the right particle channels
-       if (particles% pos(1,i) > pos_max(1)) then
-          if (particles% pos(2,i) < (pos_max(2)/2.d0)) then
-             particles% species(i) = 1
-          else 
-             particles% species(i) = 2
-          end if 
+       if (old_pos(1) > cells% edges(1)) then
+          check = 1
+       else
+          check = 0
        end if
        particles% pos(1,i) = modulo( particles% pos(1,i) , cells% edges(1) )
        particles% vel(:,i) = particles% vel(:,i) + g*dt
@@ -280,6 +280,15 @@ contains
           end if
        else
           particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
+       end if
+       !particles crossing the boundary at x_max will change species before pbc 
+       !keeping in mind that we initialize with the right particle channels
+       if (check==1) then
+          if (particles% pos(3,i) < (cells% edges(3)/2.d0)) then
+             particles% species(i) = 1
+          else 
+             particles% species(i) = 2
+          end if 
        end if
     end do
   end subroutine mpcd_stream_zwall_inoutlet
