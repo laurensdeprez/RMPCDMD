@@ -31,7 +31,7 @@ program setup_fluid
 
   integer :: N 
 
-  integer :: i, L(3), seed_size, clock, error
+  integer :: i, L(3), bufferlength, seed_size, clock, error
   integer, allocatable :: seed(:)
 
   double precision :: v_com(3), wall_v(3,2), wall_t(2)
@@ -54,7 +54,9 @@ program setup_fluid
 
   call h5open_f(error)
 
-  L = [30, 6, 30]
+  bufferlength = 20
+  L = [30+bufferlength, 50, 20]
+  
   N = 10*L(1)*L(2)*L(3)
 
   call solvent% init(N,2)
@@ -80,7 +82,7 @@ program setup_fluid
 
   call solvent_cells%count_particles(solvent% pos)
 
-  call datafile% create('data_setup_simple_flow_inout.h5', 'RMPCDMD:setup_simple_fluid', '0.0 dev', 'Pierre de Buyl')
+  call datafile% create('data_setup_simple_flow_buffer.h5', 'RMPCDMD:setup_simple_fluid', '0.0 dev', 'Pierre de Buyl')
 
   call tz% init(0.d0, solvent_cells% edges(3), L(3))
   call rhoz% init(0.d0, solvent_cells% edges(3), L(3))
@@ -114,7 +116,7 @@ program setup_fluid
   do i = 1, 1000
      call wall_mpcd_step(solvent, solvent_cells, mt, &
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10]) 
-     call mpcd_stream_zwall_inoutlet(solvent, solvent_cells, tau, gravity_field)
+     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field)
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
      call solvent% sort(solvent_cells)
@@ -127,7 +129,7 @@ program setup_fluid
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10])
      v_com = sum(solvent% vel, dim=2) / size(solvent% vel, dim=2)
 
-     call mpcd_stream_zwall_inoutlet(solvent, solvent_cells, tau, gravity_field) 
+     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field) 
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
 
@@ -188,7 +190,7 @@ program setup_fluid
 
 contains
   
-  subroutine mpcd_stream_zwall_inoutlet(particles, cells, dt,g)
+  subroutine mpcd_stream_zwall_buffer(particles, cells, dt,g)
     type(particle_system_t), intent(inout) :: particles
     type(cell_system_t), intent(in) :: cells
     double precision, intent(in) :: dt
@@ -209,11 +211,13 @@ contains
        old_vel = particles% vel(:,i)
        particles% pos(:,i) = particles% pos(:,i) + particles% vel(:,i)*dt + g*dt**2/2
        particles% pos(2,i) = modulo( particles% pos(2,i) , cells% edges(2) )
-       if (old_pos(1) > cells% edges(1)) then
-          check = 1
-       else
-          check = 0
-       end if
+       if (particles% pos(1,i) > cells% edges(1)) then
+          if (particles% pos(2,i) < cells% edges(2)/2.d0) then
+             particles% species(i) = 1
+          else
+             particles% species(i) = 2
+          end if 
+       end if 
        particles% pos(1,i) = modulo( particles% pos(1,i) , cells% edges(1) )
        particles% vel(:,i) = particles% vel(:,i) + g*dt
        if (cells% has_walls) then
@@ -281,16 +285,13 @@ contains
        else
           particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
        end if
-       !particles crossing the boundary at x_max will change species before pbc 
-       !keeping in mind that we initialize with the right particle channels
-       if (check==1) then
-          if (particles% pos(3,i) < (cells% edges(3)/2.d0)) then
+       if (particles% pos(1,i) < bufferlength) then
+          if (particles% pos(2,i) < cells% edges(2)/2.d0) then
              particles% species(i) = 1
-          else 
+          else
              particles% species(i) = 2
           end if 
-       end if
+       end if 
     end do
-  end subroutine mpcd_stream_zwall_inoutlet
-
+  end subroutine mpcd_stream_zwall_buffer
 end program setup_fluid
