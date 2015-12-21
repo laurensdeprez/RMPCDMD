@@ -45,7 +45,7 @@ contains
     integer :: cell_idx
     double precision :: local_v(3), omega(3,3), vec(3)
     logical :: thermostat
-    double precision :: t_factor
+    double precision :: t_factor,virtual_v(3)
 
     thermostat = present(temperature)
     if (thermostat) then
