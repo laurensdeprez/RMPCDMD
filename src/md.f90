@@ -6,8 +6,10 @@ module md
   private
 
   public :: md_pos
+  public :: md_pos_flow
   public :: apply_pbc
   public :: md_vel
+  public :: md_vel_flow
   public :: rattle_dimer_pos
   public :: rattle_dimer_vel
 
