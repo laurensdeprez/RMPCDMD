@@ -26,6 +26,20 @@ contains
 
   end subroutine md_pos
 
+  subroutine md_pos_flow(particles, dt, ext_force)
+    type(particle_system_t), intent(inout) :: particles
+    double precision, intent(in) :: dt
+    double precision, intent(in) :: ext_force(3)
+
+    integer :: k
+
+    !$omp parallel do
+    do k = 1, particles% Nmax
+       particles% pos(:,k) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + ext_force(:))/ 2
+    end do
+
+  end subroutine md_pos_flow
+
   subroutine apply_pbc(particles, edges)
     type(particle_system_t), intent(inout) :: particles
     double precision, intent(in) :: edges(3)
@@ -51,10 +65,27 @@ contains
     !$omp parallel do
     do k = 1, particles% Nmax
        particles% vel(:,k) = particles% vel(:,k) + &
-            dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2
+            dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 
     end do
 
   end subroutine md_vel
+
+  subroutine md_vel_flow(particles, edges, dt,ext_force)
+    type(particle_system_t), intent(inout) :: particles
+    double precision, intent(in) :: edges(3)
+    double precision, intent(in) :: dt
+    double precision, intent(in) :: ext_force(3)
+
+    integer :: k
+
+    !$omp parallel do
+    do k = 1, particles% Nmax
+       particles% vel(:,k) = particles% vel(:,k) + &
+            dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 &
+            + dt*ext_force(:)
+    end do
+
+  end subroutine md_vel_flow
 
   subroutine rattle_dimer_pos(p, d, dt,edges)
     type(particle_system_t), intent(inout) :: p
