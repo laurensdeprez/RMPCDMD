@@ -47,7 +47,7 @@ program setup_single_dimer
   double precision :: colloid_pos(3,2)
 
   type(mt19937ar_t), target :: mt
-  type(PTo) :: config
+  !maatype(PTo) :: config
 
   integer :: i, L(3), seed_size, clock
   integer :: j, k
@@ -55,10 +55,10 @@ program setup_single_dimer
 
   double precision :: g(3) !gravity
   logical :: check
-  double precision :: bufferlength
+  integer :: bufferlength
   check = .false.
 
-  call PTparse(config,get_input_filename(),11)
+  !call PTparse(config,get_input_filename(),11)
 
   call random_seed(size = seed_size)
   allocate(seed(seed_size))
@@ -72,29 +72,29 @@ program setup_single_dimer
 
   call h5open_f(error)
 
-  g = [0.1d0, 0.d0, 0.d0]!PTread_ivec(config, 'g', 3) !place in inputfile
-  bufferlength = 20
-  prob = PTread_d(config,'probability')
+  g = [0.1d0, 0.d0, 0.d0] !PTread_ivec(config, 'g', 3) !place in inputfile
+  bufferlength = 20 !PTread_i(config, 'bufferlength')
+  prob = 1.d0 !PTread_d(config,'probability')
 
-  L = PTread_ivec(config, 'L', 3)
+  L = [30,50,15] !PTread_ivec(config, 'L', 3)
   L(1) = L(1)+ bufferlength
   
-  rho = PTread_i(config, 'rho')
+  rho = 10 !PTread_i(config, 'rho')
   N = rho *L(1)*L(2)*L(3)
 
-  T = PTread_d(config, 'T')
-  d = PTread_d(config, 'd')
+  T = 3.d0 !PTread_d(config, 'T')
+  d = 4.5d0 !PTread_d(config, 'd')
   
-  tau = PTread_d(config, 'tau')
-  N_MD_steps = PTread_i(config, 'N_MD')
+  tau =0.1d0 !PTread_d(config, 'tau')
+  N_MD_steps = 100 !PTread_i(config, 'N_MD')
   dt = tau / N_MD_steps
-  N_loop = PTread_i(config, 'N_loop')
+  N_loop = 1000 !PTread_i(config, 'N_loop')
 
-  sigma_C = PTread_d(config, 'sigma_C')
-  sigma_N = PTread_d(config, 'sigma_N')
+  sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
+  sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
   
-  epsilon(1,:) = PTread_dvec(config, 'epsilon_C', 2)
-  epsilon(2,:) = PTread_dvec(config, 'epsilon_N', 2)
+  epsilon(1,:) = [1.d0, 0.1d0] !PTread_dvec(config, 'epsilon_C', 2)
+  epsilon(2,:) = [1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
 
   sigma(1,:) = sigma_C
   sigma(2,:) = sigma_N
@@ -103,10 +103,10 @@ program setup_single_dimer
 
   call solvent_colloid_lj% init(epsilon, sigma, sigma_cut)
 
-  epsilon(1,1) = PTread_d(config, 'epsilon_C_C')
-  epsilon(1,2) = PTread_d(config, 'epsilon_N_C')
-  epsilon(2,1) = PTread_d(config, 'epsilon_N_C')
-  epsilon(2,2) = PTread_d(config, 'epsilon_N_N')
+  epsilon(1,1) = 1.d0 !PTread_d(config, 'epsilon_C_C')
+  epsilon(1,2) = 1.d0 !PTread_d(config, 'epsilon_N_C')
+  epsilon(2,1) = 1.d0 !PTread_d(config, 'epsilon_N_C')
+  epsilon(2,2) = 1.d0 !PTread_d(config, 'epsilon_N_N')
 
   sigma(1,1) = 2*sigma_C
   sigma(1,2) = sigma_C + sigma_N
@@ -124,9 +124,9 @@ program setup_single_dimer
 
   call colloids% init(2,2, mass) !there will be 2 species of colloids
 
-  call PTkill(config)
+  !call PTkill(config)
   
-  open(17,file ='dimerdata_bufferConc.txt')
+  open(17,file ='dimerdata_BufferConc.txt')
   open(18,file ='dimerdata_ConcBuffer.txt')
   
   colloids% species(1) = 1
@@ -149,8 +149,8 @@ program setup_single_dimer
   call solvent_cells%init(L, 1.d0)
   colloids% pos(:,1) = solvent_cells% edges/2.0
   colloids% pos(:,2) = solvent_cells% edges/2.0 
-  colloids% pos(1,:) = 0.d0
-  colloids% pos(1,2) = colloids% pos(1,2) + d
+  colloids% pos(1,1) = 0.1d0
+  colloids% pos(1,2) = colloids% pos(1,1) + d
   
   write(*, *) colloids% pos  
 
@@ -228,10 +228,10 @@ program setup_single_dimer
         
         call buffer_particles(solvent,solvent_cells% edges,bufferlength)   
  
-        if check exit
+        if (check) exit
      end do md
 
-     if check exit
+     if (check) exit
 
      solvent_cells% origin(1) = genrand_real1(mt) - 1
      solvent_cells% origin(2) = genrand_real1(mt) - 1
@@ -240,19 +240,10 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt)
+     call simple_mpcd_step(solvent, solvent_cells, mt, T)
      
-     if (modulo(i,100)==0) then
-        call concentration_field
-        write(18,*) conc_z, colloid_pos
-     end if
-
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
-     write(*,'(1i16,6f16.3,1e16.8)') i, e1, e2, &
-          kin_co, sum(solvent% vel**2)/2, &
-          e1+e2+kin_co+sum(solvent% vel**2)/2, &
-          compute_temperature(solvent, solvent_cells), &
-          sqrt(dot_product(colloids% pos(:,1) - colloids% pos(:,2),colloids% pos(:,1) - colloids% pos(:,2))) - d
+     call thermo_write
 
   end do setup
 
@@ -260,7 +251,7 @@ program setup_single_dimer
 
   ! so here we have the 'normal' RMPCDMD
   do i = 1, N_loop
-     md: do j = 1, N_MD_steps
+     md2: do j = 1, N_MD_steps
         call md_pos_flow(solvent, dt,g)
 
         ! Extra copy for rattle
@@ -272,7 +263,7 @@ program setup_single_dimer
 
         call rattle_dimer_pos(colloids, d, dt, solvent_cells% edges)
         do k = 1, colloids% Nmax
-           if (colloids% pos(1,k) > solvent% edges(1)) then
+           if (colloids% pos(1,k) > solvent_cells% edges(1)) then
               check = .true.
            end if
         end do
@@ -309,11 +300,11 @@ program setup_single_dimer
         call flag_particles
         call change_species
 
-        if check exit
+        if (check) exit
 
-     end do md
+     end do md2
 
-     if check exit
+     if (check) exit
 
      write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
                  colloids% vel, e1+e2+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
@@ -327,7 +318,7 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt)
+     call simple_mpcd_step(solvent, solvent_cells, mt, T)
      
      call refuel
      
@@ -337,11 +328,7 @@ program setup_single_dimer
      end if
 
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
-     write(*,'(1i16,6f16.3,1e16.8)') i, e1, e2, &
-          kin_co, sum(solvent% vel**2)/2, &
-          e1+e2+kin_co+sum(solvent% vel**2)/2, &
-          compute_temperature(solvent, solvent_cells), &
-          sqrt(dot_product(colloids% pos(:,1) - colloids% pos(:,2),colloids% pos(:,1) - colloids% pos(:,2))) - d
+     call thermo_write
      
 
   end do
@@ -421,8 +408,8 @@ contains
     far = (L(1)*0.45)**2
 
 
-    do n = 1,solvent% Nmax
-       if (solvent% pos(1,n) > bufferlength)
+    do n = 1,solvent% Nmax 
+       if (solvent% pos(1,n) > bufferlength) then
           if (solvent% species(n) == 2) then
              x = rel_pos(colloids% pos(:,1), solvent% pos(:,n), solvent_cells% edges)
              dist_to_C_sq = dot_product(x, x)
@@ -478,13 +465,13 @@ contains
   subroutine buffer_particles(particles,edges, bufferlength)
      type(particle_system_t), intent(inout) :: particles
      double precision, intent(in) :: edges(3)
-     double precision, intent(in) :: bufferlength
+     integer, intent(in) :: bufferlength
   
      integer :: k  
 
      do k = 1, particles% Nmax
         if (particles% pos(1,k) < bufferlength) then
-           if particles% pos(2,k) < edges(2)/2.d0 then
+           if (particles% pos(2,k) < edges(2)/2.d0) then
               particles% species = 1
            else
               particles% species = 2
