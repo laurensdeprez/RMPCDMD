@@ -50,7 +50,7 @@ program setup_single_dimer
   !maatype(PTo) :: config
 
   integer :: i, L(3), seed_size, clock
-  integer :: j, k
+  integer :: j, k, m
   integer, allocatable :: seed(:)
 
   double precision :: g(3) !gravity
@@ -86,7 +86,7 @@ program setup_single_dimer
   d = 4.5d0 !PTread_d(config, 'd')
   
   tau =0.1d0 !PTread_d(config, 'tau')
-  N_MD_steps = 100 !PTread_i(config, 'N_MD')
+  N_MD_steps = 10 !PTread_i(config, 'N_MD')
   dt = tau / N_MD_steps
   N_loop = 1000 !PTread_i(config, 'N_loop')
 
@@ -138,18 +138,18 @@ program setup_single_dimer
   solvent% vel = solvent% vel - spread(sum(solvent% vel, dim=2)/solvent% Nmax, 2, solvent% Nmax)
   solvent% force = 0
 
-  do i = 1, solvent% Nmax
-     if (solvent% pos(2,i) < (L(2)/2.d0)) then
-        solvent% species(i) = 1
+  do m = 1, solvent% Nmax
+     if (solvent% pos(2,m) < (L(2)/2.d0)) then
+        solvent% species(m) = 1
      else
-        solvent% species(i) = 2
+        solvent% species(m) = 2
      end if
   end do
 
   call solvent_cells%init(L, 1.d0)
-  colloids% pos(:,1) = solvent_cells% edges/2.0
-  colloids% pos(:,2) = solvent_cells% edges/2.0 
-  colloids% pos(1,1) = 0.1d0
+  colloids% pos(:,1) = solvent_cells% edges/2.d0
+  colloids% pos(:,2) = solvent_cells% edges/2.d0 
+  colloids% pos(1,1) = sigma_C*2**(1.d0/6.d0)+0.1d0
   colloids% pos(1,2) = colloids% pos(1,1) + d
   
   write(*, *) colloids% pos  
@@ -182,7 +182,8 @@ program setup_single_dimer
   ! setup the flow and the dimer in the buffer area
   setup: do i = 1, N_loop
      md: do j = 1, N_MD_steps
-        call md_pos_flow(solvent, dt,g)
+        call md_pos_flow(solvent, dt, g)
+
         colloids% pos_rattle = colloids% pos
         !only update the flow direction
         do k=1, colloids% Nmax
@@ -193,6 +194,7 @@ program setup_single_dimer
         do k=1, colloids% Nmax 
            if (colloids% pos(1,k) > bufferlength) then
               check = .true.
+              write(*,*) check
            end if 
         end do
 
@@ -233,6 +235,10 @@ program setup_single_dimer
 
      if (check) exit
 
+     write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
+                 colloids% vel, e1+e2+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
+                 +colloids% mass(2)*sum(colloids% vel(:,2)**2))/2 &
+                 +sum(solvent% vel**2)/2
      solvent_cells% origin(1) = genrand_real1(mt) - 1
      solvent_cells% origin(2) = genrand_real1(mt) - 1
      solvent_cells% origin(3) = genrand_real1(mt) - 1
@@ -240,19 +246,19 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt, T)
+     call simple_mpcd_step(solvent, solvent_cells, mt, temperature = T)
      
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
      call thermo_write
 
   end do setup
-
+  write(*,*) colloids% pos
   check = .false.
 
   ! so here we have the 'normal' RMPCDMD
   do i = 1, N_loop
      md2: do j = 1, N_MD_steps
-        call md_pos_flow(solvent, dt,g)
+        call md_pos_flow(solvent, dt, g)
 
         ! Extra copy for rattle
         colloids% pos_rattle = colloids% pos
@@ -265,6 +271,7 @@ program setup_single_dimer
         do k = 1, colloids% Nmax
            if (colloids% pos(1,k) > solvent_cells% edges(1)) then
               check = .true.
+              write(*,*) check
            end if
         end do
         so_max = solvent% maximum_displacement()
@@ -318,7 +325,7 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt, T)
+     call simple_mpcd_step(solvent, solvent_cells, mt, temperature=T)
      
      call refuel
      
@@ -472,9 +479,9 @@ contains
      do k = 1, particles% Nmax
         if (particles% pos(1,k) < bufferlength) then
            if (particles% pos(2,k) < edges(2)/2.d0) then
-              particles% species = 1
+              particles% species(k) = 1
            else
-              particles% species = 2
+              particles% species(k) = 2
            end if  
         end if 
      end do
