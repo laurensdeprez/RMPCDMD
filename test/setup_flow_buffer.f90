@@ -36,9 +36,10 @@ program setup_fluid
 
   double precision :: v_com(3), wall_v(3,2), wall_t(2)
   ! in this set up the gravity will have to be in the x direction 
-  double precision, parameter :: gravity_field(3) = [ 0.001d0, 0.d0, 0.d0 ]
+  double precision, parameter :: gravity_field(3) = [ 0.1d0, 0.d0, 0.d0 ]
   double precision :: T
 
+  double precision, parameter :: set_temperature = 3.d0
   double precision, parameter :: tau = 0.1d0
 
 
@@ -55,7 +56,7 @@ program setup_fluid
   call h5open_f(error)
 
   bufferlength = 20
-  L = [30+bufferlength, 50, 20]
+  L = [30+bufferlength, 50, 15]
   
   N = 10*L(1)*L(2)*L(3)
 
@@ -70,7 +71,7 @@ program setup_fluid
   call solvent% random_placement(L*1.d0)
 
   do i = 1, solvent% Nmax
-     if (solvent% pos(3,i) < (L(3)/2.d0)) then
+     if (solvent% pos(2,i) < (L(2)/2.d0)) then
         solvent% species(i) = 1
      else
         solvent% species(i) = 2
@@ -110,12 +111,12 @@ program setup_fluid
   call solvent_cells%count_particles(solvent% pos)
 
   wall_v = 0
-  wall_t = [1.0d0, 1.0d0]
+  wall_t = [set_temperature, set_temperature]
 
 
   do i = 1, 1000
      call wall_mpcd_step(solvent, solvent_cells, mt, &
-          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10]) 
+          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=set_temperature) 
      call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field)
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
@@ -126,7 +127,7 @@ program setup_fluid
 
   do i = 1, 1000
      call wall_mpcd_step(solvent, solvent_cells, mt, &
-          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10])
+          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=set_temperature)
      v_com = sum(solvent% vel, dim=2) / size(solvent% vel, dim=2)
 
      call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field) 
@@ -201,7 +202,6 @@ contains
     double precision, dimension(3) :: old_pos, old_vel
     double precision :: t_c, t_b, t_ab
     double precision :: time
-    integer :: check
 
     pos_min = 0
     pos_max = cells% edges
@@ -294,4 +294,23 @@ contains
        end if 
     end do
   end subroutine mpcd_stream_zwall_buffer
+
+  subroutine Monte_Carlo_scaling_thermostat(particles, cells, temp)
+     type(particle_system_t), intent(inout) :: particles
+     type(cell_system_t), intent(in) :: cells
+     double precision, intent(in) :: temp
+     double precision, allocatable  :: prob(:)
+     double precision :: strength,A,p
+     
+     allocate(prob(particles% Nmax))
+     !random_number(prob)
+     !random_number(p)
+     strength = 0.1
+     prob = strength*prob
+     strength = 0.1
+     
+          
+
+     
+  end subroutine Monte_Carlo_scaling_thermostat
 end program setup_fluid
