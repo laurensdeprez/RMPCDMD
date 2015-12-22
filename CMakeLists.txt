@@ -65,6 +65,10 @@ add_executable(single_dimer_flow_pbc
 programs/single_dimer_flow_pbc.f90)
 target_link_libraries(single_dimer_flow_pbc RMPCDMD fortran_h5md ParseText)
 
+add_executable(single_dimer_flow_wall
+programs/single_dimer_flow_wall.f90)
+target_link_libraries(single_dimer_flow_wall RMPCDMD fortran_h5md ParseText)
+
 add_executable(test_cell_system_0
 test/test_cell_system_0.f90)
 target_link_libraries(test_cell_system_0 RMPCDMD fortran_tester)
