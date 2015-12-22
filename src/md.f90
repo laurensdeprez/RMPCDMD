@@ -33,11 +33,15 @@ contains
     double precision, intent(in) :: dt
     double precision, intent(in) :: ext_force(3)
 
+    double precision, allocatable :: force(:,:)
     integer :: k
+    
+    allocate(force(3,particles% Nmax))
+    force = spread(ext_force, 2, particles% Nmax)
 
     !$omp parallel do
     do k = 1, particles% Nmax
-       particles% pos(:,k) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + ext_force(:))/ 2
+       particles% pos(:,k) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + force(:,k))/ 2
     end do
 
   end subroutine md_pos_flow
@@ -61,9 +65,9 @@ contains
     type(particle_system_t), intent(inout) :: particles
     double precision, intent(in) :: edges(3)
     double precision, intent(in) :: dt
-
+    
     integer :: k
-
+    
     !$omp parallel do
     do k = 1, particles% Nmax
        particles% vel(:,k) = particles% vel(:,k) + &
@@ -72,24 +76,28 @@ contains
 
   end subroutine md_vel
 
-  subroutine md_vel_flow(particles, edges, dt,ext_force)
+  subroutine md_vel_flow(particles, edges, dt, ext_force)
     type(particle_system_t), intent(inout) :: particles
     double precision, intent(in) :: edges(3)
     double precision, intent(in) :: dt
     double precision, intent(in) :: ext_force(3)
 
+    double precision, allocatable :: force(:,:)
     integer :: k
+
+    allocate(force(3,particles% Nmax))
+    force = spread(ext_force, 2, particles% Nmax)
 
     !$omp parallel do
     do k = 1, particles% Nmax
        particles% vel(:,k) = particles% vel(:,k) + &
             dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 &
-            + dt*ext_force(:)
+            + dt*force(:,k)
     end do
 
   end subroutine md_vel_flow
 
-  subroutine rattle_dimer_pos(p, d, dt,edges)
+  subroutine rattle_dimer_pos(p, d, dt, edges)
     type(particle_system_t), intent(inout) :: p
     double precision, intent(in) :: d
     double precision, intent(in) :: dt
@@ -122,7 +130,7 @@ contains
 
   end subroutine rattle_dimer_pos
 
-  subroutine rattle_dimer_vel(p, d, dt,edges)
+  subroutine rattle_dimer_vel(p, d, dt, edges)
     type(particle_system_t), intent(inout) :: p
     double precision, intent(in) :: d
     double precision, intent(in) :: dt
