@@ -210,7 +210,7 @@ contains
        old_vel = particles% vel(:,i)
        particles% pos(:,i) = particles% pos(:,i) + particles% vel(:,i)*dt + g*dt**2/2
        particles% pos(2,i) = modulo( particles% pos(2,i) , cells% edges(2) )
-       if (old_pos(1) > cells% edges(1)) then
+       if (particles% pos(1,i) > cells% edges(1)) then
           check = 1
        else
           check = 0
