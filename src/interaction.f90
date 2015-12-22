@@ -111,6 +111,6 @@ contains
 
     e = 6.75d0*epsilon * (sig6_o_r6*(sig3_o_r3 - 1.d0) + 4.d0/27.d0)
 
-  end function lj_energy
+  end function lj_energy_9_6
 
 end module interaction
