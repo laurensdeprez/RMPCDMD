@@ -7,6 +7,7 @@ module interaction
   public :: lj_force
   public :: lj_energy
   public :: lj_force_9_6
+  public :: lj_energy_9_6
 
   type lj_params_t
      integer :: n1, n2
@@ -96,6 +97,19 @@ contains
     sig6_o_r6 = sigma**6/r_sq**3
 
     e = 4.d0*epsilon * ((sig6_o_r6**2 - sig6_o_r6) + 0.25d0)
+
+  end function lj_energy
+
+  pure function lj_energy_9_6(r_sq, epsilon, sigma) result(e)
+    double precision, intent(in) :: r_sq, epsilon, sigma
+    double precision :: e
+
+    double precision :: sig6_o_r6, sig3_o_r3
+
+    sig6_o_r6 = sigma**6/r_sq**3 
+    sig3_o_r3 = sigma**3/r_sq**(3.d0/2.d0)
+
+    e = 6.75d0*epsilon * (sig6_o_r6*(sig3_o_r3 - 1.d0) + 4.d0/27.d0)
 
   end function lj_energy
 
