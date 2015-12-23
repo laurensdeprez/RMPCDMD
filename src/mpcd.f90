@@ -36,7 +36,7 @@ contains
   end function rand_sphere
 
   subroutine simple_mpcd_step(particles, cells, state, temperature)
-    class(particle_system_t), intent(in) :: particles
+    class(particle_system_t), intent(inout) :: particles
     class(cell_system_t), intent(in) :: cells
     type(mt19937ar_t), intent(inout) :: state
     double precision, intent(in), optional :: temperature
