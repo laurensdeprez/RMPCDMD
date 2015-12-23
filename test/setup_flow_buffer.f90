@@ -117,7 +117,7 @@ program setup_fluid
   do i = 1, 1000
      call wall_mpcd_step(solvent, solvent_cells, mt, &
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=set_temperature) 
-     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field)
+     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field,bufferlength)
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
      call solvent% sort(solvent_cells)
@@ -130,7 +130,7 @@ program setup_fluid
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=set_temperature)
      v_com = sum(solvent% vel, dim=2) / size(solvent% vel, dim=2)
 
-     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field) 
+     call mpcd_stream_zwall_buffer(solvent, solvent_cells, tau, gravity_field,bufferlength) 
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
 
@@ -191,14 +191,15 @@ program setup_fluid
 
 contains
   
-  subroutine mpcd_stream_zwall_buffer(particles, cells, dt,g)
+  subroutine mpcd_stream_zwall_buffer(particles, cells, dt,g, bufferlength)
     type(particle_system_t), intent(inout) :: particles
     type(cell_system_t), intent(in) :: cells
     double precision, intent(in) :: dt
+    double precision, dimension(3), intent(in):: g
+    integer, intent(in) :: bufferlength
 
     integer :: i
     double precision :: pos_min(3), pos_max(3), delta
-    double precision, dimension(3), intent(in):: g
     double precision, dimension(3) :: old_pos, old_vel
     double precision :: t_c, t_b, t_ab
     double precision :: time
