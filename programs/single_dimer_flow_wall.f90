@@ -1,8 +1,3 @@
-!the focus in this program is to get the flow and the buffer (so the dimer is on a track) working with all pbc
-!wall interactions with the colloid will be sorted out later (9-6 LJ potential) 
-!but oc since we have a flow there will be no full periodic boundary (change of species) in the flow direction
-!also what there has to happen with the colloid when it hits the back end of the simulation box in the direction box
-!we will probably just break the loop for simplicity and well ...
 program setup_single_dimer
   use common
   use cell_system
@@ -25,6 +20,7 @@ program setup_single_dimer
   type(neighbor_list_t) :: neigh
   type(lj_params_t) :: solvent_colloid_lj
   type(lj_params_t) :: colloid_lj
+  type(lj_params_t) :: walls_colloid_lj
 
   integer :: rho
   integer :: N
@@ -35,7 +31,9 @@ program setup_single_dimer
   double precision :: sigma(2,2), sigma_cut(2,2)
   double precision :: mass(2)
 
-  double precision :: e1, e2
+  double precision :: v_com(3), wall_v(3,2), wall_t(2)
+
+  double precision :: e1, e2, e_wall
   double precision :: tau, dt , T
   double precision :: d,prob
   double precision :: skin, co_max, so_max
@@ -84,6 +82,9 @@ program setup_single_dimer
 
   T = 3.d0 !PTread_d(config, 'T')
   d = 4.5d0 !PTread_d(config, 'd')
+
+  wall_v = 0
+  wall_t = [T, T]
   
   tau =0.1d0 !PTread_d(config, 'tau')
   N_MD_steps = 10 !PTread_i(config, 'N_MD')
@@ -116,6 +117,16 @@ program setup_single_dimer
 
   call colloid_lj% init(epsilon, sigma, sigma_cut)
 
+  epsilon(1,1) = 1.d0 
+  epsilon(1,2) = 1.d0 
+  epsilon(2,1) = 1.d0 
+  epsilon(2,2) = 1.d0 
+  sigma(1,:) = [sigma_C, sigma_N]
+  sigma(2,:) = [sigma_C, sigma_N]
+  sigma_cut = sigma*2**(1.d0/6.d0)
+
+  call walls_colloid_lj% init(epsilon, sigma, sigma_cut)
+
   mass(1) = rho * sigma_C**3 * 4 * 3.14159265/3
   mass(2) = rho * sigma_N**3 * 4 * 3.14159265/3
   write(*,*) 'mass =', mass
@@ -126,8 +137,8 @@ program setup_single_dimer
 
   !call PTkill(config)
   
-  open(17,file ='dimerdata_BufferConc.txt')
-  open(18,file ='dimerdata_ConcBuffer.txt')
+  open(17,file ='dimerdata_FullExp_1.txt')
+  open(18,file ='dimerdata_FullExp_2.txt')
   
   colloids% species(1) = 1
   colloids% species(2) = 2
@@ -170,6 +181,7 @@ program setup_single_dimer
 
   e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
+  e_wall = colloid_wall(colloids, walls_colloid_lj,solvent_cells% edges)
   solvent% force_old = solvent% force
   colloids% force_old = colloids% force
 
@@ -182,7 +194,7 @@ program setup_single_dimer
   ! setup the flow and the dimer in the buffer area
   setup: do i = 1, N_loop
      md: do j = 1, N_MD_steps
-        call md_pos_flow(solvent, dt, g)
+        call mpcd_zwall_light(solvent, solvent_cells, dt,g)
 
         colloids% pos_rattle = colloids% pos
         !only update the flow direction
@@ -218,8 +230,9 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
+        e_wall = colloid_wall(colloids, walls_colloid_lj,solvent_cells% edges)
 
-        call md_vel_flow(solvent, solvent_cells% edges, dt, g)
+        call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
 
         do k=1, colloids% Nmax
            colloids% vel(:,k) = colloids% vel(:,k) + &
@@ -236,7 +249,7 @@ program setup_single_dimer
      if (check) exit
 
      write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
-                 colloids% vel, e1+e2+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
+                 colloids% vel, e1+e2+e_wall+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
                  +colloids% mass(2)*sum(colloids% vel(:,2)**2))/2 &
                  +sum(solvent% vel**2)/2
      solvent_cells% origin(1) = genrand_real1(mt) - 1
@@ -246,7 +259,8 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt, temperature = T)
+     call wall_mpcd_step(solvent, solvent_cells, mt, &
+          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature = T)
      
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
      call thermo_write
@@ -258,7 +272,7 @@ program setup_single_dimer
   ! so here we have the 'normal' RMPCDMD
   do i = 1, N_loop
      md2: do j = 1, N_MD_steps
-        call md_pos_flow(solvent, dt, g)
+        call mpcd_zwall_light(solvent, solvent_cells, dt,g)
 
         ! Extra copy for rattle
         colloids% pos_rattle = colloids% pos
@@ -294,8 +308,9 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
+        e_wall = colloid_wall(colloids, walls_colloid_lj,solvent_cells% edges)
 
-        call md_vel_flow(solvent, solvent_cells% edges, dt, g)
+        call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
 
         do k=1, colloids% Nmax
            colloids% vel(:,k) = colloids% vel(:,k) + &
@@ -314,7 +329,7 @@ program setup_single_dimer
      if (check) exit
 
      write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
-                 colloids% vel, e1+e2+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
+                 colloids% vel, e1+e2+e_wall+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
                  +colloids% mass(2)*sum(colloids% vel(:,2)**2))/2 &
                  +sum(solvent% vel**2)/2
      
@@ -325,7 +340,8 @@ program setup_single_dimer
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call simple_mpcd_step(solvent, solvent_cells, mt, temperature=T)
+     call wall_mpcd_step(solvent, solvent_cells, mt, &
+          wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=T)
      
      call refuel
      
@@ -486,5 +502,107 @@ contains
         end if 
      end do
   end subroutine buffer_particles
+  
+  function colloid_wall(colloids, walls_colloid_lj,edges) result(e)
+     type(particle_system_t), intent(inout) :: colloids
+     type(lj_params_t), intent(in) :: walls_colloid_lj
+     double precision, intent(in) :: edges(3)
+     double precision :: e
+
+     integer :: k
+     integer :: s
+     double precision :: r_sq1, d1(3), r_sq2, d2(3),f1(3),f2(3)
+
+     f1= 0.d0
+     f2 = 0.d0
+     e = 0.d0
+     do k = 1, colloids% Nmax
+        s = colloids% species(k)
+        d1 = rel_pos(colloids% pos(:,k), [edges(1)/2.d0, edges(2)/2.d0,0.d0],edges)
+        d2 = rel_pos(colloids% pos(:,k), [edges(1)/2.d0, edges(2)/2.d0,edges(3)],edges)
+        r_sq1 = dot_product(d1,d1)
+        r_sq2 = dot_product(d2,d2)
+        if (r_sq1 <= walls_colloid_lj% cut_sq(1,s)) then
+           f1 = lj_force_9_6(d1, r_sq1, walls_colloid_lj% epsilon(1,s), walls_colloid_lj% sigma(1,s))
+           e = e + lj_energy_9_6(r_sq1, walls_colloid_lj% epsilon(1,s), walls_colloid_lj% sigma(1,s))
+        end if
+        if (r_sq2 <= walls_colloid_lj% cut_sq(1,s)) then
+           f2 = lj_force_9_6(d2, r_sq2, walls_colloid_lj% epsilon(1,s), walls_colloid_lj% sigma(1,s))
+           e = e + lj_energy_9_6(r_sq2, walls_colloid_lj% epsilon(1,s), walls_colloid_lj% sigma(1,s))
+        end if
+        colloids% force(:,k) = colloids% force(:,k) - f1 - f2
+     end do
+
+  end function colloid_wall 
+
+  subroutine mpcd_zwall_light(particles, cells, dt,g)
+    type(particle_system_t), intent(inout) :: particles
+    type(cell_system_t), intent(in) :: cells
+    double precision, intent(in) :: dt
+    double precision, dimension(3), intent(in):: g
+
+    integer :: i
+    double precision :: pos_min(3), pos_max(3), delta
+    double precision, dimension(3) :: old_pos, old_vel
+    double precision :: t_c
+    double precision :: time
+
+    pos_min = 0
+    pos_max = cells% edges
+
+    do i = 1, particles% Nmax
+       old_pos = particles% pos(:,i) 
+       old_vel = particles% vel(:,i)
+       particles% pos(:,i) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + g)/ 2
+       particles% pos(2,i) = modulo( particles% pos(2,i) , cells% edges(2) )
+       particles% pos(1,i) = modulo( particles% pos(1,i) , cells% edges(1) )
+       if (cells% has_walls) then
+          if (particles% pos(3,i) < pos_min(3)) then
+             particles% vel(:,i) = particles% vel(:,i) + g*dt
+             ! bounce velocity
+             particles% vel(:,i) = -particles% vel(:,i)
+             ! bounce position
+             t_c = abs(old_pos(3)/old_vel(3))
+             particles% pos(:,i) = old_pos + old_vel*t_c + particles% vel(:,i)*(dt - t_c)
+             particles% wall_flag = 1
+          else if (particles% pos(3,i) > pos_max(3)) then
+             particles% vel(:,i) = particles% vel(:,i) + g*dt
+             ! bounce velocity
+             particles% vel(:,i) = -particles% vel(:,i)
+             ! particle position
+             t_c = abs((pos_max(3) - old_pos(3))/old_vel(3)) 
+             particles% pos(:,i) = old_pos + old_vel*t_c + particles% vel(:,i)*(dt - t_c)
+             particles% wall_flag = 1
+          end if
+       else
+          particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
+       end if 
+    end do
+  end subroutine mpcd_zwall_light
+  
+  subroutine md_vel_flow_partial(particles, edges, dt, ext_force)
+    type(particle_system_t), intent(inout) :: particles
+    double precision, intent(in) :: edges(3)
+    double precision, intent(in) :: dt
+    double precision, intent(in) :: ext_force(3)
+
+    double precision, allocatable :: force(:,:)
+    integer :: k
+
+    allocate(force(3,particles% Nmax))
+    force = spread(ext_force, 2, particles% Nmax)
+
+    !$omp parallel do
+    do k = 1, particles% Nmax
+       if (particles% wall_flag(k) == 0) then
+          particles% vel(:,k) = particles% vel(:,k) + &
+               dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 &
+               + dt*force(:,k)
+       else
+         particles% wall_flag(k) = 0
+       end if 
+    end do
+
+  end subroutine md_vel_flow_partial
 
 end program setup_single_dimer
