@@ -1,8 +1,3 @@
-!the focus in this program is to get the flow and the buffer (so the dimer is on a track) working with all pbc
-!wall interactions with the colloid will be sorted out later (9-6 LJ potential) 
-!but oc since we have a flow there will be no full periodic boundary (change of species) in the flow direction
-!also what there has to happen with the colloid when it hits the back end of the simulation box in the direction box
-!we will probably just break the loop for simplicity and well ...
 program setup_single_dimer
   use common
   use cell_system
@@ -172,7 +167,7 @@ program setup_single_dimer
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
   solvent% force_old = solvent% force
   colloids% force_old = colloids% force
-
+  
   write(*,*) ''
   write(*,*) '    i           |    e co so     |   e co co     |   kin co      |   kin so      |   total       |   temp        |'
   write(*,*) ''
@@ -250,7 +245,7 @@ program setup_single_dimer
      
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
      call thermo_write
-
+    
   end do setup
   write(*,*) colloids% pos
   check = .false.
@@ -306,9 +301,9 @@ program setup_single_dimer
 
         call flag_particles
         call change_species
+        call buffer_particles(solvent,solvent_cells% edges,bufferlength)
 
         if (check) exit
-
      end do md2
 
      if (check) exit
@@ -329,10 +324,7 @@ program setup_single_dimer
      
      call refuel
      
-     if (modulo(i,100)==0) then
-        call concentration_field
-        write(18,*) conc_z, colloid_pos
-     end if
+     
 
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
      call thermo_write
@@ -430,7 +422,7 @@ contains
     end do
   end subroutine refuel
 
-  subroutine concentration_field
+  subroutine concentration_field    
     double precision :: dimer_orient(3),x(3),y(3),z(3)
     double precision :: solvent_pos(3,solvent% Nmax)
     double precision :: dz,r,theta,x_pos,y_pos,z_pos
