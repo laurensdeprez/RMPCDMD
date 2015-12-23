@@ -33,15 +33,14 @@ contains
     double precision, intent(in) :: dt
     double precision, intent(in) :: ext_force(3)
 
-    double precision, allocatable :: force(:,:)
+    
     integer :: k
     
-    allocate(force(3,particles% Nmax))
-    force = spread(ext_force, 2, particles% Nmax)
+    
 
     !$omp parallel do
     do k = 1, particles% Nmax
-       particles% pos(:,k) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + force(:,k))/ 2
+       particles% pos(:,k) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + ext_force)/ 2
     end do
 
   end subroutine md_pos_flow
@@ -82,17 +81,16 @@ contains
     double precision, intent(in) :: dt
     double precision, intent(in) :: ext_force(3)
 
-    double precision, allocatable :: force(:,:)
+    
     integer :: k
 
-    allocate(force(3,particles% Nmax))
-    force = spread(ext_force, 2, particles% Nmax)
+    
 
     !$omp parallel do
     do k = 1, particles% Nmax
        particles% vel(:,k) = particles% vel(:,k) + &
             dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 &
-            + dt*force(:,k)
+            + dt*ext_force
     end do
 
   end subroutine md_vel_flow
