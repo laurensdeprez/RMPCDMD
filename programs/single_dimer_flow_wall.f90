@@ -1,18 +1,23 @@
 program setup_single_dimer
+  use md
+  use neighbor_list
   use common
   use cell_system
   use particle_system
   use hilbert
-  use neighbor_list
+  use interaction
   use hdf5
   use h5md_module
-  use interaction
-  use mt19937ar_module
+  use particle_system_io
   use mpcd
-  use md
+  use threefry_module
   use ParseText
   use iso_c_binding
+  use omp_lib
   implicit none
+
+  type(threefry_rng_t), allocatable :: state(:)
+  
 
   type(cell_system_t) :: solvent_cells
   type(particle_system_t) :: solvent
@@ -37,19 +42,18 @@ program setup_single_dimer
   double precision :: tau, dt , T
   double precision :: d,prob
   double precision :: skin, co_max, so_max
-  integer :: N_MD_steps, N_loop
+  integer :: N_MD_steps, N_loop,
   integer :: n_extra_sorting
   double precision :: kin_co
 
   double precision :: conc_z(400)
   double precision :: colloid_pos(3,2)
 
-  type(mt19937ar_t), target :: mt
-  !maatype(PTo) :: config
-
-  integer :: i, L(3), seed_size, clock
+  !type(PTo) :: config
+  integer(c_int64_t)
+  integer :: i, L(3),  n_threads
   integer :: j, k, m
-  integer, allocatable :: seed(:)
+  
 
   double precision :: g(3) !gravity
   logical :: check
@@ -58,15 +62,17 @@ program setup_single_dimer
 
   !call PTparse(config,get_input_filename(),11)
 
-  call random_seed(size = seed_size)
-  allocate(seed(seed_size))
-  call system_clock(count=clock)
-  seed = clock + 37 * [ (i - 1, i = 1, seed_size) ]
-  call random_seed(put = seed)
-  deallocate(seed)
+  n_threads = omp_get_max_threads
+  allocate(state(n_threads))
+  
+  seed = 7428301037362090395
 
-  call system_clock(count=clock)
-  call init_genrand(mt, int(clock, c_long))
+  do i = 1, n_threads
+     state(i)%counter%c0 = 0
+     state(i)%counter%c1 = 0
+     state(i)%key%c0 = 0
+     state(i)%key%c1 = seed
+  end do
 
   call h5open_f(error)
 
@@ -90,6 +96,8 @@ program setup_single_dimer
   N_MD_steps = 10 !PTread_i(config, 'N_MD')
   dt = tau / N_MD_steps
   N_loop = 1000 !PTread_i(config, 'N_loop')
+
+  
 
   sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
   sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
@@ -144,9 +152,15 @@ program setup_single_dimer
   colloids% species(2) = 2
   colloids% vel = 0
   
-  call random_number(solvent% vel(:, :))
-  solvent% vel = (solvent% vel - 0.5d0)*sqrt(12*T)
-  solvent% vel = solvent% vel - spread(sum(solvent% vel, dim=2)/solvent% Nmax, 2, solvent% Nmax)
+  do i=1, solvent% Nmax
+     solvent% vel(1,i) = threefry_normal(state(1))
+     solvent% vel(2,i) = threefry_normal(state(1))
+     solvent% vel(3,i) = threefry_normal(state(1))
+  end do
+  solvent%vel = solvent%vel*sqrt(set_temperature)
+  v_com = sum(solvent% vel, dim=2) / size(solvent% vel, dim=2)
+  solvent% vel = solvent% vel - spread(v_com, dim=2, ncopies=size(solvent% vel, dim=2))
+
   solvent% force = 0
 
   do m = 1, solvent% Nmax
@@ -252,14 +266,13 @@ program setup_single_dimer
                  colloids% vel, e1+e2+e_wall+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
                  +colloids% mass(2)*sum(colloids% vel(:,2)**2))/2 &
                  +sum(solvent% vel**2)/2
-     solvent_cells% origin(1) = genrand_real1(mt) - 1
-     solvent_cells% origin(2) = genrand_real1(mt) - 1
-     solvent_cells% origin(3) = genrand_real1(mt) - 1
+     call random_number(solvent_cells% origin)
+     solvent_cells% origin = solvent_cells% origin - 1
 
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call wall_mpcd_step(solvent, solvent_cells, mt, &
+     call wall_mpcd_step(solvent, solvent_cells, state, &
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature = T)
      
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
@@ -337,14 +350,13 @@ program setup_single_dimer
                  +colloids% mass(2)*sum(colloids% vel(:,2)**2))/2 &
                  +sum(solvent% vel**2)/2
      
-     solvent_cells% origin(1) = genrand_real1(mt) - 1
-     solvent_cells% origin(2) = genrand_real1(mt) - 1
-     solvent_cells% origin(3) = genrand_real1(mt) - 1
+     call random_number(solvent_cells% origin)
+     solvent_cells% origin = solvent_cells% origin - 1
 
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
-     call wall_mpcd_step(solvent, solvent_cells, mt, &
+     call wall_mpcd_step(solvent, solvent_cells, state, &
           wall_temperature=wall_t, wall_v=wall_v, wall_n=[10, 10], bulk_temperature=T)
      
      call refuel
@@ -360,6 +372,15 @@ program setup_single_dimer
   write(*,*) 'n extra sorting', n_extra_sorting
   
   call h5close_f(error)
+  
+  write(*,'(a16,f8.3)') solvent%time_stream%name, solvent%time_stream%total
+  write(*,'(a16,f8.3)') solvent%time_step%name, solvent%time_step%total
+  write(*,'(a16,f8.3)') solvent%time_count%name, solvent%time_count%total
+  write(*,'(a16,f8.3)') solvent%time_sort%name, solvent%time_sort%total
+  write(*,'(a16,f8.3)') solvent%time_ct%name, solvent%time_ct%total
+  write(*,'(a16,f8.3)') 'total                          ', &
+       solvent%time_stream%total + solvent%time_step%total + solvent%time_count%total +&
+       solvent%time_sort%total + solvent%time_ct%total
   
 contains
 
