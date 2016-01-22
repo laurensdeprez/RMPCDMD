@@ -47,57 +47,9 @@ contains
     integer :: cell_idx
     double precision :: local_v(3), omega(3,3), vec(3)
     logical :: thermostat
+    integer :: thread_id
 
     double precision :: t_factor,virtual_v(3)
-
-    thermostat = present(temperature)
-    if (thermostat) then
-       t_factor = sqrt(temperature)
-       do cell_idx = 1, cells% N
-          if (cells% cell_count(cell_idx) <= 1) cycle
-             start = cells% cell_start(cell_idx)
-             n = cells% cell_count(cell_idx)
-             local_v = 0
-             do i = start, start + n - 1
-                local_v = local_v + particles% vel(:, i)
-             end do
-             local_v = local_v / n
-             virtual_v = 0
-             do i = start, start + n - 1
-                call mt_normal_data(particles% vel(:, i), state)
-                particles% vel(:, i) = particles% vel(:, i)*t_factor
-                virtual_v = virtual_v + particles% vel(:, i)
-             end do
-             virtual_v = local_v - virtual_v / dble(n)
-             do i = start, start + n - 1
-                particles% vel(:, i) = particles% vel(:, i) + virtual_v
-             end do
-       end do 
-    else 
-       do cell_idx = 1, cells% N
-          if (cells% cell_count(cell_idx) <= 1) cycle
-             start = cells% cell_start(cell_idx)
-             n = cells% cell_count(cell_idx)
-                 
-             local_v = 0
-             do i = start, start + n - 1
-                local_v = local_v + particles% vel(:, i)
-             end do
-             local_v = local_v / n
-             vec = rand_sphere(state)
-             omega = &
-                reshape( (/ &
-                   vec(1)**2, vec(1)*vec(2) + vec(3), vec(1)*vec(3) - vec(2) ,&
-                   vec(2)*vec(1) - vec(3) , vec(2)**2 , vec(2)*vec(3) + vec(1),&
-                   vec(3)*vec(1) + vec(2), vec(3)*vec(2) - vec(1), vec(3)**2 &
-                   /), (/3, 3/))
-             do i = start, start + n - 1
-                particles% vel(:, i) = local_v + matmul(omega, (particles% vel(:, i)-local_v))
-             end do
-       end do
-    end if
-
-    integer :: thread_id
 
     thermostat = present(temperature)
     if (thermostat) error stop 'thermostatting not implemented'

@@ -247,16 +247,18 @@ program setup_single_dimer
         e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
 
         call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
-
+        ! only update in the direction of the flow
         do k=1, colloids% Nmax
-           colloids% vel(:,k) = colloids% vel(:,k) + &
-             dt * ( colloids% force(:,k) + colloids% force_old(:,k) ) / (2 * colloids% mass(k))
+           colloids% vel(1,k) = colloids% vel(1,k) + &
+             dt * ( colloids% force(1,k) + colloids% force_old(1,k) ) / (2 * colloids% mass(k))
         end do
 
         call rattle_dimer_vel(colloids, d, dt, solvent_cells% edges)
+
+        call flag_particles
+        call change_species
+
         
-        call buffer_particles(solvent,solvent_cells% edges,bufferlength)   
- 
         if (check) exit
      end do md
 
@@ -337,7 +339,7 @@ program setup_single_dimer
 
         call flag_particles
         call change_species
-        call buffer_particles(solvent,solvent_cells% edges,bufferlength)
+        
 
         if (check) exit
 
@@ -505,24 +507,6 @@ contains
     colloid_pos(:,2) = 0
     colloid_pos(3,2) = d + colloids% pos(3,1)
   end subroutine concentration_field
-  
-  subroutine buffer_particles(particles,edges, bufferlength)
-     type(particle_system_t), intent(inout) :: particles
-     double precision, intent(in) :: edges(3)
-     integer, intent(in) :: bufferlength
-  
-     integer :: k  
-
-     do k = 1, particles% Nmax
-        if (particles% pos(1,k) < bufferlength) then
-           if (particles% pos(2,k) < edges(2)/2.d0) then
-              particles% species(k) = 1
-           else
-              particles% species(k) = 2
-           end if  
-        end if 
-     end do
-  end subroutine buffer_particles
   
   function colloid_wall_interaction(colloids, walls_colloid_lj,edges) result(e)
      type(particle_system_t), intent(inout) :: colloids
