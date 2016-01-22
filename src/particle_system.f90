@@ -55,6 +55,9 @@ module particle_system
      integer, pointer :: wall_flag(:)
      integer, pointer :: wall_flag_old(:)
      integer, pointer :: wall_flag_pointer(:)
+     type(timer_t) :: time_stream, time_step, time_sort, time_count, time_ct
+     type(timer_t) :: time_md_pos, time_md_vel, time_self_force, time_max_disp
+
    contains
      procedure :: init
      procedure :: init_from_file
@@ -138,6 +141,16 @@ contains
     this% wall_flag_old => this% flag2
     
     this% wall_flag = 0
+
+    call this%time_stream%init('stream')
+    call this%time_step%init('step')
+    call this%time_sort%init('sort')
+    call this%time_count%init('count')
+    call this%time_ct%init('compute_temperature')
+    call this%time_md_pos%init('md_pos')
+    call this%time_md_vel%init('md_vel')
+    call this%time_self_force%init('self force')
+    call this%time_max_disp%init('maximum disp')
 
   end subroutine init
 
@@ -260,8 +273,11 @@ contains
     L = cells% L
     nowalls = .not. cells% has_walls
 
+    call this%time_count%tic()
     call cells%count_particles(this% pos)
+    call this%time_count%tac()
 
+    call this%time_sort%tic()
     !$omp parallel do private(p, idx, start)
     do i=1, this% Nmax
        if (this% species(i) == 0) continue
@@ -286,6 +302,7 @@ contains
     end do
 
     cells% cell_start = cells% cell_start - cells% cell_count
+    call this%time_sort%tac()
 
     call switch(this% pos, this% pos_old)
     call switch(this% image, this% image_old)
@@ -299,12 +316,13 @@ contains
 
   function maximum_displacement(this) result(r)
     implicit none
-    class(particle_system_t), intent(in) :: this
+    class(particle_system_t), intent(inout) :: this
     double precision :: r
 
     integer :: i
     double precision :: r_sq, rmax_sq
 
+    call this%time_max_disp%tic()
     !$omp parallel
     rmax_sq = 0
     !$omp do private(r_sq) reduction(MAX:rmax_sq)
@@ -318,6 +336,7 @@ contains
     end do
     !$omp end do
     !$omp end parallel
+    call this%time_max_disp%tac()
 
     r = sqrt(rmax_sq)
 

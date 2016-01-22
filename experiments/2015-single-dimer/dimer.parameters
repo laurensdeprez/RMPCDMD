@@ -1,20 +1,25 @@
 # physical parameters
 T = 0.16666
 L = 20 20 20  
+
 rho = 9 
 tau = 1.0
 probability = 1.0
 
 # simulation parameters
-N_MD = 100
-N_loop = 1000
 
-# link length
-d = 4.5
+N_MD = 200
+N_loop = 50
+seed = 7428301037362090395
+h5md_file = dimer.h5
+
 
 # interaction parameters
-sigma_N = 2.0
+sigma_N = 4.0
 sigma_C = 2.0
+
+
+d = 6.8
 
 epsilon_N = 1.0 0.1
 epsilon_C = 1.0 1.0

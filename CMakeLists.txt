@@ -20,10 +20,11 @@ src/cell_system.f90
 src/hilbert.f90
 src/interaction.f90
 src/particle_system.f90
+src/particle_system_io.f90
 src/mpcd.f90
 src/md.f90
 src/neighbor_list.f90)
-target_link_libraries(RMPCDMD fortran_h5md mt19937ar_module)
+target_link_libraries(RMPCDMD fortran_h5md mt19937ar_module threefry_module)
 
 add_executable(try_all
 test/try_all.f90)
@@ -37,9 +38,9 @@ add_executable(setup_thermal_fluid
 test/setup_thermal_fluid.f90)
 target_link_libraries(setup_thermal_fluid RMPCDMD fortran_h5md ParseText)
 
-add_executable(setup_flow
-test/setup_flow.f90)
-target_link_libraries(setup_flow RMPCDMD fortran_h5md ParseText)
+add_executable(poiseuille_flow
+programs/poiseuille_flow.f90)
+target_link_libraries(poiseuille_flow RMPCDMD fortran_h5md ParseText)
 
 add_executable(setup_flow_inoutlet
 test/setup_flow_inoutlet.f90)
