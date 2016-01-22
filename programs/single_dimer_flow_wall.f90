@@ -42,7 +42,7 @@ program setup_single_dimer
   double precision :: tau, dt , T
   double precision :: d,prob
   double precision :: skin, co_max, so_max
-  integer :: N_MD_steps, N_loop,
+  integer :: N_MD_steps, N_loop
   integer :: n_extra_sorting
   double precision :: kin_co
 
@@ -50,7 +50,7 @@ program setup_single_dimer
   double precision :: colloid_pos(3,2)
 
   !type(PTo) :: config
-  integer(c_int64_t)
+  integer(c_int64_t) :: seed
   integer :: i, L(3),  n_threads
   integer :: j, k, m
   
@@ -62,10 +62,10 @@ program setup_single_dimer
 
   !call PTparse(config,get_input_filename(),11)
 
-  n_threads = omp_get_max_threads
+  n_threads = omp_get_max_threads()
   allocate(state(n_threads))
   
-  seed = 7428301037362090395
+  seed = 742830
 
   do i = 1, n_threads
      state(i)%counter%c0 = 0
@@ -157,7 +157,7 @@ program setup_single_dimer
      solvent% vel(2,i) = threefry_normal(state(1))
      solvent% vel(3,i) = threefry_normal(state(1))
   end do
-  solvent%vel = solvent%vel*sqrt(set_temperature)
+  solvent%vel = solvent%vel*sqrt(T)
   v_com = sum(solvent% vel, dim=2) / size(solvent% vel, dim=2)
   solvent% vel = solvent% vel - spread(v_com, dim=2, ncopies=size(solvent% vel, dim=2))
 
