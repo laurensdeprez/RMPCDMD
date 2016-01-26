@@ -27,6 +27,20 @@ program setup_single_dimer
   type(lj_params_t) :: colloid_lj
   type(lj_params_t) :: walls_colloid_lj
 
+  type(profile_t) :: tz
+  type(histogram_t) :: rhoz
+  type(profile_t) :: vx
+
+  type(h5md_file_t) :: datafile
+  type(h5md_element_t) :: elem
+  type(h5md_element_t) :: elem_tz, elem_tz_count, elem_vx_count
+  type(h5md_element_t) :: elem_rhoz
+  type(h5md_element_t) :: elem_vx
+  type(h5md_element_t) :: elem_T
+  type(h5md_element_t) :: elem_v_com
+  integer(HID_T) :: box_group, solvent_group
+  type(particle_system_io_t) :: solvent_io
+
   integer :: rho
   integer :: N
   integer :: error
@@ -86,7 +100,7 @@ program setup_single_dimer
   rho = 10 !PTread_i(config, 'rho')
   N = rho *L(1)*L(2)*L(3)
 
-  T = 3.d0 !PTread_d(config, 'T')
+  T = 5.d0 !PTread_d(config, 'T')
   d = 4.5d0 !PTread_d(config, 'd')
 
   wall_v = 0
@@ -171,7 +185,7 @@ program setup_single_dimer
      end if
   end do
 
-  call solvent_cells%init(L, 1.d0)
+  call solvent_cells%init(L, 1.d0,has_walls = .true.)
   colloids% pos(:,1) = solvent_cells% edges/2.d0
   colloids% pos(:,2) = solvent_cells% edges/2.d0 
   colloids% pos(1,1) = sigma_C*2**(1.d0/6.d0)+0.1d0
@@ -183,7 +197,7 @@ program setup_single_dimer
 
   call solvent% sort(solvent_cells)
 
-  call neigh% init(colloids% Nmax, int(300*max(sigma_C,sigma_N)**3))
+  call neigh% init(colloids% Nmax, 10*int(300*max(sigma_C,sigma_N)**3))
 
   skin = 1.5
   n_extra_sorting = 0
@@ -191,11 +205,13 @@ program setup_single_dimer
   call neigh% make_stencil(solvent_cells, max_cut+skin)
 
   call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
-
+  
+  !call datafile% create(PTread_s(config, 'h5md_file'), 'RMPCDMD:poiseuille_flow', &
+  !    'N/A', 'Pierre de Buyl')
 
   e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-  e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+  !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
   solvent% force_old = solvent% force
   colloids% force_old = colloids% force
   write(*,*) colloids% force
@@ -244,9 +260,9 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-        e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
 
-        call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
+        
         ! only update in the direction of the flow
         do k=1, colloids% Nmax
            colloids% vel(1,k) = colloids% vel(1,k) + &
@@ -318,7 +334,7 @@ program setup_single_dimer
            colloids% pos_old = colloids% pos
            n_extra_sorting = n_extra_sorting + 1
         end if
-
+        
         call switch(solvent% force, solvent% force_old)
         call switch(colloids% force, colloids% force_old)
 
@@ -326,7 +342,7 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-        e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
 
         call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
 
@@ -558,7 +574,7 @@ contains
     do i = 1, particles% Nmax
        old_pos = particles% pos(:,i) 
        old_vel = particles% vel(:,i)
-       particles% pos(:,i) = particles% pos(:,k) + dt * particles% vel(:,k) + dt**2 * (particles% force(:,k) + g)/ 2
+       particles% pos(:,i) = particles% pos(:,i) + dt * particles% vel(:,i) + dt**2 * (particles% force(:,i) + g)/ 2
        !particles% pos(2,i) = modulo( particles% pos(2,i) , cells% edges(2) )
        !particles% pos(1,i) = modulo( particles% pos(1,i) , cells% edges(1) )
        if (cells% has_walls) then
@@ -577,9 +593,9 @@ contains
              ! particle position
              t_c = abs((pos_max(3) - old_pos(3))/old_vel(3)) 
              particles% pos(:,i) = old_pos + old_vel*t_c + particles% vel(:,i)*(dt - t_c)
-             particles% wall_flag = 1
+             particles% wall_flag = 1 
           end if
-       else
+       !else
           !particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
        end if 
     end do
