@@ -76,6 +76,8 @@ program setup_single_dimer
 
   !call PTparse(config,get_input_filename(),11)
 
+  
+
   n_threads = omp_get_max_threads()
   allocate(state(n_threads))
   
@@ -84,7 +86,7 @@ program setup_single_dimer
   do i = 1, n_threads
      state(i)%counter%c0 = 0
      state(i)%counter%c1 = 0
-     state(i)%key%c0 = 0
+     state(i)%key%c0 = int(i, c_int64_t)
      state(i)%key%c1 = seed
   end do
 
@@ -100,7 +102,7 @@ program setup_single_dimer
   rho = 10 !PTread_i(config, 'rho')
   N = rho *L(1)*L(2)*L(3)
 
-  T = 5.d0 !PTread_d(config, 'T')
+  T = 3.d0 !PTread_d(config, 'T')
   d = 4.5d0 !PTread_d(config, 'd')
 
   wall_v = 0
@@ -161,7 +163,8 @@ program setup_single_dimer
   
   open(17,file ='dimerdata_FullExp_1.txt')
   open(18,file ='dimerdata_FullExp_2.txt')
-  
+  open(19,file ='dimerdata_vx_flow_wall.txt')  
+
   colloids% species(1) = 1
   colloids% species(2) = 2
   colloids% vel = 0
@@ -211,13 +214,17 @@ program setup_single_dimer
 
   e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-  !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+  e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
   solvent% force_old = solvent% force
   colloids% force_old = colloids% force
   write(*,*) colloids% force
   write(*,*) ''
   write(*,*) '    i           |    e co so     |   e co co     |   kin co      |   kin so      |   total       |   temp        |'
   write(*,*) ''
+
+  call vx% init(0.d0, solvent_cells% edges(3), L(3))
+
+ 
 
   kin_co = (mass(1)*sum(colloids% vel(:,1)**2)+mass(2)*sum(colloids% vel(:,2)**2))/2
   call thermo_write
@@ -260,9 +267,10 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-        !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        colloids% force(:,2) = 0
+        colloids% force(:,3) = 0
 
-        
         ! only update in the direction of the flow
         do k=1, colloids% Nmax
            colloids% vel(1,k) = colloids% vel(1,k) + &
@@ -286,6 +294,13 @@ program setup_single_dimer
                  +sum(solvent% vel**2)/2
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
+
+     call compute_vx(solvent, vx)
+     if (modulo(i, 50) == 0) then
+        call vx% norm()
+        write(19,*) vx% data
+        call vx% reset()
+     end if
 
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
@@ -342,7 +357,7 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-        !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
 
         call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
 
@@ -371,6 +386,13 @@ program setup_single_dimer
      call random_number(solvent_cells% origin)
      solvent_cells% origin = solvent_cells% origin - 1
 
+     call compute_vx(solvent, vx)
+     if (modulo(i, 50) == 0) then
+        call vx% norm()
+        write(19,*) vx% data
+        call vx% reset()
+     end if
+
      call solvent% sort(solvent_cells)
      call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
 
@@ -385,6 +407,7 @@ program setup_single_dimer
      
 
   end do
+  
   
 
   write(*,*) 'n extra sorting', n_extra_sorting
