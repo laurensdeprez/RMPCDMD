@@ -92,7 +92,7 @@ program setup_single_dimer
 
   call h5open_f(error)
 
-  g = [0.1d0, 0.d0, 0.d0] !PTread_ivec(config, 'g', 3) !place in inputfile
+  g = [0.01d0, 0.d0, 0.d0] !PTread_ivec(config, 'g', 3) !place in inputfile
   bufferlength = 20 !PTread_i(config, 'bufferlength')
   prob = 1.d0 !PTread_d(config,'probability')
 
@@ -103,7 +103,7 @@ program setup_single_dimer
   N = rho *L(1)*L(2)*L(3)
 
   T = 3.d0 !PTread_d(config, 'T')
-  d = 4.5d0 !PTread_d(config, 'd')
+  d = 2.5d0 !PTread_d(config, 'd')
 
   wall_v = 0
   wall_t = [T, T]
@@ -115,8 +115,8 @@ program setup_single_dimer
 
   
 
-  sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
-  sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
+  sigma_C = 1.d0 !PTread_d(config, 'sigma_C')
+  sigma_N = 1.d0 !PTread_d(config, 'sigma_N')
   
   epsilon(1,:) = [1.d0, 0.1d0] !PTread_dvec(config, 'epsilon_C', 2)
   epsilon(2,:) = [1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
@@ -214,7 +214,7 @@ program setup_single_dimer
 
   e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-  e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+  !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
   solvent% force_old = solvent% force
   colloids% force_old = colloids% force
   write(*,*) colloids% force
@@ -235,11 +235,11 @@ program setup_single_dimer
 
         colloids% pos_rattle = colloids% pos
         !only update the flow direction
-        do k=1, colloids% Nmax
-           colloids% pos(1,k) = colloids% pos(1,k) + dt * colloids% vel(1,k) + &
-                dt**2 * colloids% force(1,k) / (2 * colloids% mass(k))
-        end do
-        call rattle_dimer_pos(colloids, d, dt, solvent_cells% edges)
+        !do k=1, colloids% Nmax
+        !   colloids% pos(1,k) = colloids% pos(1,k) + dt * colloids% vel(1,k) + &
+        !        dt**2 * colloids% force(1,k) / (2 * colloids% mass(k))
+        !end do
+        !call rattle_dimer_pos(colloids, d, dt, solvent_cells% edges)
         do k=1, colloids% Nmax 
            if (colloids% pos(1,k) > bufferlength) then
               check = .true.
@@ -267,26 +267,29 @@ program setup_single_dimer
         colloids% force = 0
         e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
         e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
-        e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
-        colloids% force(:,2) = 0
-        colloids% force(:,3) = 0
+        !e_wall = colloid_wall_interaction(colloids, walls_colloid_lj,solvent_cells% edges)
+        colloids% force(2,:) = 0
+        colloids% force(3,:) = 0
+        colloids% force(1,:) = 0
+
+        call md_vel_flow_partial(solvent, solvent_cells% edges, dt, g)
 
         ! only update in the direction of the flow
-        do k=1, colloids% Nmax
-           colloids% vel(1,k) = colloids% vel(1,k) + &
-             dt * ( colloids% force(1,k) + colloids% force_old(1,k) ) / (2 * colloids% mass(k))
-        end do
+        !do k=1, colloids% Nmax
+        !   colloids% vel(1,k) = colloids% vel(1,k) + &
+        !     dt * ( colloids% force(1,k) + colloids% force_old(1,k) ) / (2 * colloids% mass(k))
+        !end do
 
-        call rattle_dimer_vel(colloids, d, dt, solvent_cells% edges)
+        !call rattle_dimer_vel(colloids, d, dt, solvent_cells% edges)
 
         call flag_particles
         call change_species
 
         
-        if (check) exit
+        if (check) exit setup
      end do md
 
-     if (check) exit
+     
 
      write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
                  colloids% vel, e1+e2+e_wall+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
@@ -296,9 +299,10 @@ program setup_single_dimer
      solvent_cells% origin = solvent_cells% origin - 1
 
      call compute_vx(solvent, vx)
-     if (modulo(i, 50) == 0) then
+     if (modulo(i, 5) == 0) then
         call vx% norm()
         write(19,*) vx% data
+        flush(19)
         call vx% reset()
      end if
 
@@ -315,11 +319,13 @@ program setup_single_dimer
         write(*,*) colloids% force
      end if
   end do setup
+
   write(*,*) colloids% pos
+
   check = .false.
 
   ! so here we have the 'normal' RMPCDMD
-  do i = 1, N_loop
+  box: do i = 1, N_loop
      md2: do j = 1, N_MD_steps
         call mpcd_stream_zwall_light(solvent, solvent_cells, dt,g)
 
@@ -372,11 +378,11 @@ program setup_single_dimer
         call change_species
         
 
-        if (check) exit
+        if (check) exit box
 
      end do md2
 
-     if (check) exit
+     
 
      write(17,*) colloids% pos + colloids% image * spread(solvent_cells% edges, dim=2, ncopies=colloids% Nmax), &
                  colloids% vel, e1+e2+e_wall+(colloids% mass(1)*sum(colloids% vel(:,1)**2) &
@@ -387,7 +393,7 @@ program setup_single_dimer
      solvent_cells% origin = solvent_cells% origin - 1
 
      call compute_vx(solvent, vx)
-     if (modulo(i, 50) == 0) then
+     if (modulo(i, 10) == 0) then
         call vx% norm()
         write(19,*) vx% data
         call vx% reset()
@@ -406,7 +412,7 @@ program setup_single_dimer
      call thermo_write
      
 
-  end do
+  end do box
   
   
 
@@ -580,6 +586,7 @@ contains
   end function colloid_wall_interaction 
 
   subroutine mpcd_stream_zwall_light(particles, cells, dt,g)
+    !solvent%time_stream%tic()
     type(particle_system_t), intent(inout) :: particles
     type(cell_system_t), intent(in) :: cells
     double precision, intent(in) :: dt
@@ -602,29 +609,25 @@ contains
        !particles% pos(1,i) = modulo( particles% pos(1,i) , cells% edges(1) )
        if (cells% has_walls) then
           if (particles% pos(3,i) < pos_min(3)) then
-             particles% vel(:,i) = particles% vel(:,i) + g*dt
-             ! bounce velocity
-             particles% vel(:,i) = -particles% vel(:,i)
-             ! bounce position
              t_c = abs(old_pos(3)/old_vel(3))
-             particles% pos(:,i) = old_pos + old_vel*t_c + particles% vel(:,i)*(dt - t_c)
+             particles% vel(:,i) = -(old_vel + g*t_c) + g*(dt-t_c)
+             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 + (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
              particles% wall_flag = 1
           else if (particles% pos(3,i) > pos_max(3)) then
-             particles% vel(:,i) = particles% vel(:,i) + g*dt
-             ! bounce velocity
-             particles% vel(:,i) = -particles% vel(:,i)
-             ! particle position
-             t_c = abs((pos_max(3) - old_pos(3))/old_vel(3)) 
-             particles% pos(:,i) = old_pos + old_vel*t_c + particles% vel(:,i)*(dt - t_c)
-             particles% wall_flag = 1 
+             t_c = abs((pos_max(3)-old_pos(3))/old_vel(3))
+             particles% vel(:,i) = -(old_vel + g*t_c) + g*(dt-t_c)
+             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 + (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
+             particles% wall_flag = 1
           end if
        !else
           !particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
        end if 
     end do
+    !solvent%time_stream%tac()
   end subroutine mpcd_stream_zwall_light
   
   subroutine md_vel_flow_partial(particles, edges, dt, ext_force)
+    !solvent%time_stream%tic()
     type(particle_system_t), intent(inout) :: particles
     double precision, intent(in) :: edges(3)
     double precision, intent(in) :: dt
@@ -633,20 +636,19 @@ contains
     double precision, allocatable :: force(:,:)
     integer :: k
 
-    allocate(force(3,particles% Nmax))
-    force = spread(ext_force, 2, particles% Nmax)
+    
 
     !$omp parallel do
     do k = 1, particles% Nmax
        if (particles% wall_flag(k) == 0) then
           particles% vel(:,k) = particles% vel(:,k) + &
                dt * ( particles% force(:,k) + particles% force_old(:,k) ) / 2 &
-               + dt*force(:,k)
+               + dt*ext_force
        else
          particles% wall_flag(k) = 0
        end if 
     end do
-
+    !solvent%time_stream%tac()
   end subroutine md_vel_flow_partial
 
 end program setup_single_dimer
