@@ -92,7 +92,7 @@ program setup_single_dimer
 
   call h5open_f(error)
 
-  g = [0.01d0, 0.d0, 0.d0] !PTread_ivec(config, 'g', 3) !place in inputfile
+  g = [0.001d0, 0.d0, 0.d0] !PTread_ivec(config, 'g', 3) !place in inputfile
   bufferlength = 20 !PTread_i(config, 'bufferlength')
   prob = 1.d0 !PTread_d(config,'probability')
 
@@ -102,8 +102,8 @@ program setup_single_dimer
   rho = 10 !PTread_i(config, 'rho')
   N = rho *L(1)*L(2)*L(3)
 
-  T = 3.d0 !PTread_d(config, 'T')
-  d = 2.5d0 !PTread_d(config, 'd')
+  T = 5.d0 !PTread_d(config, 'T')
+  d = 4.5d0 !PTread_d(config, 'd')
 
   wall_v = 0
   wall_t = [T, T]
@@ -115,8 +115,8 @@ program setup_single_dimer
 
   
 
-  sigma_C = 1.d0 !PTread_d(config, 'sigma_C')
-  sigma_N = 1.d0 !PTread_d(config, 'sigma_N')
+  sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
+  sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
   
   epsilon(1,:) = [1.d0, 0.1d0] !PTread_dvec(config, 'epsilon_C', 2)
   epsilon(2,:) = [1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
@@ -208,9 +208,6 @@ program setup_single_dimer
   call neigh% make_stencil(solvent_cells, max_cut+skin)
 
   call neigh% update_list(colloids, solvent, max_cut+skin, solvent_cells)
-  
-  !call datafile% create(PTread_s(config, 'h5md_file'), 'RMPCDMD:poiseuille_flow', &
-  !    'N/A', 'Pierre de Buyl')
 
   e1 = compute_force(colloids, solvent, neigh, solvent_cells% edges, solvent_colloid_lj)
   e2 = compute_force_n2(colloids, solvent_cells% edges, colloid_lj)
@@ -299,7 +296,7 @@ program setup_single_dimer
      solvent_cells% origin = solvent_cells% origin - 1
 
      call compute_vx(solvent, vx)
-     if (modulo(i, 5) == 0) then
+     if (modulo(i, 50) == 0) then
         call vx% norm()
         write(19,*) vx% data
         flush(19)
@@ -393,9 +390,10 @@ program setup_single_dimer
      solvent_cells% origin = solvent_cells% origin - 1
 
      call compute_vx(solvent, vx)
-     if (modulo(i, 10) == 0) then
+     if (modulo(i, 50) == 0) then
         call vx% norm()
         write(19,*) vx% data
+        flush(19)
         call vx% reset()
      end if
 
@@ -410,7 +408,10 @@ program setup_single_dimer
      
      kin_co = (colloids% mass(1)*sum(colloids% vel(:,1)**2)+ colloids% mass(2)*sum(colloids% vel(:,2)**2))/2
      call thermo_write
-     
+     if (mod(i,10)==0) then
+        write(*,*) colloids% pos
+        write(*,*) colloids% force
+     end if
 
   end do box
   
@@ -611,13 +612,13 @@ contains
           if (particles% pos(3,i) < pos_min(3)) then
              t_c = abs(old_pos(3)/old_vel(3))
              particles% vel(:,i) = -(old_vel + g*t_c) + g*(dt-t_c)
-             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 + (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
-             particles% wall_flag = 1
+             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 - (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
+             particles% wall_flag(i) = 1
           else if (particles% pos(3,i) > pos_max(3)) then
              t_c = abs((pos_max(3)-old_pos(3))/old_vel(3))
              particles% vel(:,i) = -(old_vel + g*t_c) + g*(dt-t_c)
-             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 + (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
-             particles% wall_flag = 1
+             particles% pos(:,i) = old_pos + old_vel*t_c + g*t_c**2/2 - (old_vel + g*t_c)*(dt-t_c)+(dt-t_c)**2*g/2
+             particles% wall_flag(i) = 1
           end if
        !else
           !particles% pos(3,i) = modulo( particles% pos(3,i) , cells% edges(3) )
@@ -633,7 +634,7 @@ contains
     double precision, intent(in) :: dt
     double precision, intent(in) :: ext_force(3)
 
-    double precision, allocatable :: force(:,:)
+    
     integer :: k
 
     
