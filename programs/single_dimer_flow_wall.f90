@@ -48,6 +48,8 @@ program setup_single_dimer
   double precision :: sigma_N, sigma_C, max_cut
   double precision :: epsilon(2,2)
   double precision :: sigma(2,2), sigma_cut(2,2)
+  double precision :: epsilon_solvent(2,3)
+  double precision :: sigma_solvent(2,3), sigma_cut_solvent(2,3)
   double precision :: mass(2)
 
   double precision :: v_com(3), wall_v(3,2), wall_t(2)
@@ -113,20 +115,20 @@ program setup_single_dimer
   tau =0.1d0 !PTread_d(config, 'tau')
   N_MD_steps = 10 !PTread_i(config, 'N_MD')
   dt = tau / N_MD_steps
-  N_loop = 10000 !PTread_i(config, 'N_loop')
+  N_loop = 40000 !PTread_i(config, 'N_loop')
 
   
 
   sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
   sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
   
-  epsilon(1,:) = [1.d0, 0.1d0] !PTread_dvec(config, 'epsilon_C', 2)
-  epsilon(2,:) = [1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
+  epsilon_solvent(1,:) = [1.d0, 0.1d0, 1.d0] !PTread_dvec(config, 'epsilon_C', 2)
+  epsilon_solvent(2,:) = [1.d0, 1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
 
-  sigma(1,:) = sigma_C
-  sigma(2,:) = sigma_N
-  sigma_cut = sigma*2**(1.d0/6.d0)
-  max_cut = maxval(sigma_cut)
+  sigma_solvent(1,:) = sigma_C
+  sigma_solvent(2,:) = sigma_N
+  sigma_cut_solvent = sigma_solvent*2**(1.d0/6.d0)
+  max_cut = maxval(sigma_cut_solvent)
 
   call solvent_colloid_lj% init(epsilon, sigma, sigma_cut)
 
@@ -163,9 +165,8 @@ program setup_single_dimer
 
   !call PTkill(config)
   
-  open(17,file ='dimerdata_FullExp_1.txt')
-  open(18,file ='dimerdata_FullExp_2.txt')
-  open(19,file ='dimerdata_vx_flow_wall.txt')  
+  open(17,file ='dimerdata_FullExp_solvent3.txt')
+  open(19,file ='dimerdata_vx_flow_wall_solvent3.txt')  
 
   colloids% species(1) = 1
   colloids% species(2) = 2
@@ -186,7 +187,7 @@ program setup_single_dimer
      if (solvent% pos(2,m) < (L(2)/2.d0)) then
         solvent% species(m) = 1
      else
-        solvent% species(m) = 2
+        solvent% species(m) = 3
      end if
   end do
 
@@ -258,7 +259,7 @@ program setup_single_dimer
            end do
         end if
         
-        if (.not. on_track)
+        if (.not. on_track) then
            do k=1, colloids% Nmax 
               if (colloids% pos(1,k) > solvent_cells% edges(1)) then
                  stopped = .true.
