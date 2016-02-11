@@ -122,15 +122,15 @@ program setup_single_dimer
   sigma_C = 2.d0 !PTread_d(config, 'sigma_C')
   sigma_N = 2.d0 !PTread_d(config, 'sigma_N')
   
-  epsilon_solvent(1,:) = [1.d0, 0.1d0, 1.d0] !PTread_dvec(config, 'epsilon_C', 2)
-  epsilon_solvent(2,:) = [1.d0, 1.d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
+  epsilon_solvent(1,:) = [1.d0, 1.d0, 1.d0] !PTread_dvec(config, 'epsilon_C', 2)
+  epsilon_solvent(2,:) = [1.d0, 0.1d0, 1.d0] !PTread_dvec(config, 'epsilon_N', 2)
 
   sigma_solvent(1,:) = sigma_C
   sigma_solvent(2,:) = sigma_N
   sigma_cut_solvent = sigma_solvent*2**(1.d0/6.d0)
   max_cut = maxval(sigma_cut_solvent)
 
-  call solvent_colloid_lj% init(epsilon, sigma, sigma_cut)
+  call solvent_colloid_lj% init(epsilon_solvent, sigma_solvent, sigma_cut_solvent)
 
   epsilon(1,1) = 1.d0 !PTread_d(config, 'epsilon_C_C')
   epsilon(1,2) = 1.d0 !PTread_d(config, 'epsilon_N_C')
@@ -159,7 +159,7 @@ program setup_single_dimer
   mass(2) = rho * sigma_N**3 * 4 * 3.14159265/3
   write(*,*) 'mass =', mass
 
-  call solvent% init(N,2) !there will be 2 species of solvent particles
+  call solvent% init(N,3) !there will be 3 species of solvent particles
 
   call colloids% init(2,2, mass) !there will be 2 species of colloids
 
