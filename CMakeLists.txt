@@ -42,13 +42,13 @@ add_executable(poiseuille_flow
 programs/poiseuille_flow.f90)
 target_link_libraries(poiseuille_flow RMPCDMD fortran_h5md ParseText)
 
-add_executable(setup_flow_inoutlet
-test/setup_flow_inoutlet.f90)
-target_link_libraries(setup_flow_inoutlet RMPCDMD fortran_h5md ParseText)
+#add_executable(setup_flow_inoutlet
+#test/setup_flow_inoutlet.f90)
+#target_link_libraries(setup_flow_inoutlet RMPCDMD fortran_h5md ParseText)
 
-add_executable(setup_flow_buffer
-test/setup_flow_buffer.f90)
-target_link_libraries(setup_flow_buffer RMPCDMD fortran_h5md ParseText)
+#add_executable(setup_flow_buffer
+#test/setup_flow_buffer.f90)
+#target_link_libraries(setup_flow_buffer RMPCDMD fortran_h5md ParseText)
 
 add_executable(setup_simple_colloids
 test/setup_simple_colloids.f90)
@@ -62,9 +62,9 @@ add_executable(single_dimer_pbc
 programs/single_dimer_pbc.f90)
 target_link_libraries(single_dimer_pbc RMPCDMD fortran_h5md ParseText)
 
-add_executable(single_dimer_flow_pbc
-programs/single_dimer_flow_pbc.f90)
-target_link_libraries(single_dimer_flow_pbc RMPCDMD fortran_h5md ParseText)
+#add_executable(single_dimer_flow_pbc
+#programs/single_dimer_flow_pbc.f90)
+#target_link_libraries(single_dimer_flow_pbc RMPCDMD fortran_h5md ParseText)
 
 add_executable(single_dimer_flow_wall
 programs/single_dimer_flow_wall.f90)
